@@ -1212,8 +1212,10 @@ function renderFooterSummary() {
 // names, source notes, technical field values), which stays as
 // reviewed/sourced and is out of scope for translation, same
 // scope-bounding discipline as the rest of this file's data work.
-// "Ir al protocolo" buttons are a deliberate, explicit exception
-// (see CLAUDE.md) and are never run through t().
+// "Ir al protocolo" buttons were a deliberate Spanish-only exception for a
+// while (see CHANGELOG/CLAUDE.md) but were reverted to full i18n on
+// 29 Sep 2026 per explicit request ("cambia todo al idioma seleccionado") --
+// they now run through t("detail_goto_protocol") like everything else.
 // ---------------------------------------------------------------
 let currentLang = "en";
 const I18N = {
@@ -1250,7 +1252,12 @@ const I18N = {
     status_pilot: "Pilot", status_draft: "Draft", status_superseded: "Superseded",
     status_no_data: "Unspecified / no calendar", status_none: "No protocol",
     info_agency_not_specified: "Agency not specified", info_source_document: "Source document ↗",
-    info_empty: "No detailed trigger/technical record available for this protocol in the reviewed corpus. This is disclosed rather than left silently blank."
+    info_empty: "No detailed trigger/technical record available for this protocol in the reviewed corpus. This is disclosed rather than left silently blank.",
+    detail_close: "close", detail_protocols_systematized: "protocol(s) systematized",
+    detail_protocol_count_suffix: "protocol(s)", detail_fao_financing: "FAO financing",
+    detail_cerf_financing: "CERF financing", detail_not_specified: "Not specified",
+    detail_view_timeline: "View activity timeline (Gantt)", detail_activities_suffix: "activities",
+    detail_goto_protocol: "Go to protocol"
   },
   es: {
     app_title: "Mapa Global de Protocolos de Acci\u00f3n Anticipatoria",
@@ -1285,7 +1292,12 @@ const I18N = {
     status_pilot: "Piloto", status_draft: "Borrador", status_superseded: "Reemplazado",
     status_no_data: "Sin especificar / sin calendario", status_none: "Sin protocolo",
     info_agency_not_specified: "Agencia no especificada", info_source_document: "Documento fuente ↗",
-    info_empty: "No hay un registro t\u00e9cnico detallado de activaci\u00f3n disponible para este protocolo en el corpus revisado. Esto se indica expl\u00edcitamente en lugar de dejarse en blanco."
+    info_empty: "No hay un registro t\u00e9cnico detallado de activaci\u00f3n disponible para este protocolo en el corpus revisado. Esto se indica expl\u00edcitamente en lugar de dejarse en blanco.",
+    detail_close: "cerrar", detail_protocols_systematized: "protocolo(s) sistematizado(s)",
+    detail_protocol_count_suffix: "protocolo(s)", detail_fao_financing: "Financiamiento FAO",
+    detail_cerf_financing: "Financiamiento CERF", detail_not_specified: "No especificado",
+    detail_view_timeline: "Ver cronograma de actividades (Gantt)", detail_activities_suffix: "actividades",
+    detail_goto_protocol: "Ir al protocolo"
   },
   fr: {
     app_title: "Carte mondiale des protocoles d'action anticipatoire",
@@ -1320,7 +1332,12 @@ const I18N = {
     status_pilot: "Pilote", status_draft: "Brouillon", status_superseded: "Remplac\u00e9",
     status_no_data: "Non pr\u00e9cis\u00e9 / pas de calendrier", status_none: "Aucun protocole",
     info_agency_not_specified: "Agence non pr\u00e9cis\u00e9e", info_source_document: "Document source ↗",
-    info_empty: "Aucune fiche technique de d\u00e9clenchement d\u00e9taill\u00e9e disponible pour ce protocole dans le corpus examin\u00e9. Ceci est indiqu\u00e9 explicitement plut\u00f4t que laiss\u00e9 vide silencieusement."
+    info_empty: "Aucune fiche technique de d\u00e9clenchement d\u00e9taill\u00e9e disponible pour ce protocole dans le corpus examin\u00e9. Ceci est indiqu\u00e9 explicitement plut\u00f4t que laiss\u00e9 vide silencieusement.",
+    detail_close: "fermer", detail_protocols_systematized: "protocole(s) syst\u00e9matis\u00e9(s)",
+    detail_protocol_count_suffix: "protocole(s)", detail_fao_financing: "Financement FAO",
+    detail_cerf_financing: "Financement CERF", detail_not_specified: "Non pr\u00e9cis\u00e9",
+    detail_view_timeline: "Voir le calendrier d'activit\u00e9s (Gantt)", detail_activities_suffix: "activit\u00e9s",
+    detail_goto_protocol: "Aller au protocole"
   }
 };
 function t(key) { return (I18N[currentLang] && I18N[currentLang][key]) || I18N.en[key] || key; }
@@ -1553,39 +1570,51 @@ window.goToInfoForProtocol = goToInfoForProtocol;
 function showDetail(geoName, protocols) {
   const f = computeFilters();
   const detail = document.getElementById("detail");
-  let html = '<a class="close-detail" onclick="clearSelection()">&times; close</a>';
+  let html = '<a class="close-detail" onclick="clearSelection()">&times; ' + t("detail_close") + '</a>';
   html += '<div id="country-title">' + (geoName || protocols[0].country) + '</div>';
-  html += '<div id="country-sub">' + protocols.length + ' protocol(s) systematized</div>';
+  html += '<div id="country-sub">' + protocols.length + ' ' + t("detail_protocols_systematized") + '</div>';
   protocols.forEach(p => {
     const st = statusOf(p);
     const hasTimeline = TIMELINE_DATA.some(r => r.pid === p.id);
     html += '<div class="protocol-card">';
-    html += '<span class="status-pill" style="background:' + STATUS_COLOR[st] + '">' + STATUS_LABEL_EN[st] + '</span>';
+    html += '<span class="status-pill" style="background:' + STATUS_COLOR[st] + '">' + statusLabel(st) + '</span>';
     if (p.id) html += '<span class="status-pill" style="background:#e9ecef;color:#475467;">' + p.id + '</span>';
     html += '<div class="hazard">' + p.hazard + '</div>';
-    html += '<div class="agency">' + (p.agency || "Agency not specified") + ' &middot; ' + (p.region || "") + (p.priority ? " &middot; " + p.priority : "") + '</div>';
-    const faoFin = p.fao_finance ? "$" + Number(p.fao_finance).toLocaleString("en-US") : "Not specified";
-    const cerfFin = p.cerf_finance ? "$" + Number(p.cerf_finance).toLocaleString("en-US") : "Not specified";
-    html += '<div class="finance-row">FAO financing: ' + faoFin + '<br>CERF financing: ' + cerfFin + '</div>';
-    if (p.document_url) html += '<div class="finance-row"><a href="' + p.document_url + '" target="_blank" rel="noopener">Source document &#8599;</a></div>';
-    if (hasTimeline) html += '<div class="finance-row"><a onclick="goToGanttForProtocol(\'' + p.id + '\')" style="cursor:pointer;color:var(--accent);">View activity timeline (Gantt) &rarr;</a></div>';
-    if (p.id) html += '<div class="finance-row" style="margin-top:8px;"><button class="btn-goto-protocol" onclick="goToInfoForProtocol(\'' + p.id + '\')">Ir al protocolo &rarr;</button></div>';
+    html += '<div class="agency">' + (p.agency || t("info_agency_not_specified")) + ' &middot; ' + (p.region || "") + (p.priority ? " &middot; " + p.priority : "") + '</div>';
+    const faoFin = p.fao_finance ? "$" + Number(p.fao_finance).toLocaleString("en-US") : t("detail_not_specified");
+    const cerfFin = p.cerf_finance ? "$" + Number(p.cerf_finance).toLocaleString("en-US") : t("detail_not_specified");
+    html += '<div class="finance-row">' + t("detail_fao_financing") + ': ' + faoFin + '<br>' + t("detail_cerf_financing") + ': ' + cerfFin + '</div>';
+    if (p.document_url) html += '<div class="finance-row"><a href="' + p.document_url + '" target="_blank" rel="noopener">' + t("info_source_document") + '</a></div>';
+    if (hasTimeline) html += '<div class="finance-row"><a onclick="goToGanttForProtocol(\'' + p.id + '\')" style="cursor:pointer;color:var(--accent);">' + t("detail_view_timeline") + ' &rarr;</a></div>';
+    if (p.id) html += '<div class="finance-row" style="margin-top:8px;"><button class="btn-goto-protocol" onclick="goToInfoForProtocol(\'' + p.id + '\')">' + t("detail_goto_protocol") + ' &rarr;</button></div>';
     html += '</div>';
   });
   detail.innerHTML = html;
 }
 
+// Single source of truth for the Map tab's right-hand detail panel, so a
+// language switch (which re-runs refreshAll -> this) re-renders whatever is
+// currently shown -- either the selected country's cards or the empty-state
+// placeholder -- in the newly selected language, instead of leaving stale
+// text from whatever language was active when the country was first clicked.
+function renderDetailPanel() {
+  if (currentSelectedCountry) {
+    const feature = GEO_DATA.features.find(f => f.properties.name === currentSelectedCountry);
+    if (feature) { showDetail(currentSelectedCountry, feature.properties.protocols); return; }
+  }
+  document.getElementById("detail").innerHTML = '<div class="placeholder">' + t("map_detail_placeholder") + '</div>';
+}
+
 function clearSelection() {
   currentSelectedCountry = null;
-  document.getElementById("detail").innerHTML = '<div class="placeholder">Click a country on the map or a result in the list to see its protocol details.</div>';
+  renderDetailPanel();
   refreshMap(computeFilters());
 }
 window.clearSelection = clearSelection;
 
 function selectCountry(name) {
   currentSelectedCountry = name;
-  const feature = GEO_DATA.features.find(f => f.properties.name === name);
-  if (feature) showDetail(name, feature.properties.protocols);
+  renderDetailPanel();
   refreshMap(computeFilters());
 }
 window.selectCountry = selectCountry;
@@ -1599,7 +1628,7 @@ function refreshMap(f) {
       if (protocols.length > 0) {
         layer.on("click", () => selectCountry(feature.properties.name));
         const st = countryDominantStatus(protocols, f);
-        layer.bindTooltip(feature.properties.name + " — " + protocols.length + " protocol(s) · " + STATUS_LABEL_EN[st], { sticky: true });
+        layer.bindTooltip(feature.properties.name + " — " + protocols.length + " " + t("detail_protocol_count_suffix") + " · " + statusLabel(st), { sticky: true });
       }
     }
   }).addTo(map);
@@ -1659,7 +1688,7 @@ function renderDashTable(matched, f) {
     const n = timelineCounts[p.id] || 0;
     return {
       id: p.id || "—", _id: p.id || "", country: p.country, hazard: p.hazard, region: p.region || "—", priority: p.priority || "—", agency: p.agency || "—",
-      status: STATUS_LABEL_EN[st], _status: st, timeline: n ? (n + " activities") : "—",
+      status: statusLabel(st), _status: st, timeline: n ? (n + " " + t("detail_activities_suffix")) : "—",
       fao_finance: Number(p.fao_finance) || 0, cerf_finance: Number(p.cerf_finance) || 0
     };
   });
@@ -1676,7 +1705,7 @@ function renderDashTable(matched, f) {
       '<td>' + r.timeline + '</td>' +
       '<td>' + (r.fao_finance ? "$" + r.fao_finance.toLocaleString("en-US") : "—") + '</td>' +
       '<td>' + (r.cerf_finance ? "$" + r.cerf_finance.toLocaleString("en-US") : "—") + '</td>' +
-      '<td>' + (r._id ? '<button class="btn-goto-protocol" onclick="goToInfoForProtocol(\'' + r._id + '\')">Ir al protocolo &rarr;</button>' : '—') + '</td>' +
+      '<td>' + (r._id ? '<button class="btn-goto-protocol" onclick="goToInfoForProtocol(\'' + r._id + '\')">' + t("detail_goto_protocol") + ' &rarr;</button>' : '—') + '</td>' +
     '</tr>'
   ).join("");
 }
@@ -1805,7 +1834,7 @@ function renderGantt(f) {
     const meta = protocolById(pid);
     html += '<tr><td class="meta-cell" colspan="13" style="background:var(--fao-primary-light);font-weight:700;color:var(--navy);">' +
       escapeHtml(g.country) + ' — ' + escapeHtml(g.hazard) + (meta && meta.id ? ' <span style="font-weight:400;color:#667085;">(' + escapeHtml(meta.id) + ')</span>' : '') +
-      (meta && meta.id ? ' <button class="btn-goto-protocol-sm" onclick="goToInfoForProtocol(\'' + escapeHtml(meta.id) + '\')">Ir al protocolo &rarr;</button>' : '') +
+      (meta && meta.id ? ' <button class="btn-goto-protocol-sm" onclick="goToInfoForProtocol(\'' + escapeHtml(meta.id) + '\')">' + t("detail_goto_protocol") + ' &rarr;</button>' : '') +
       '</td></tr>';
     rows.forEach(r => {
       const si = MONTH_NAMES.indexOf(r.start);
@@ -1939,6 +1968,7 @@ function renderInfoTab(ganttRows) {
 function refreshAll() {
   const f = computeFilters();
   refreshMap(f);
+  renderDetailPanel();
   const matched = renderList(f);
   renderRegional(f);
   renderKPIs(matched, f);
